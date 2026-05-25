@@ -49,6 +49,24 @@ const std::unordered_set<std::string> SYSTEM_FUNCTION_NAME = { "0-system-faassch
                                                                "0-system-faascontroller", "0-system-faasmanager" };
 const std::string IMMEDIATELY_EXPORT = "immediatelyExport";
 const std::string BATCH_EXPORT = "batchExport";
+const std::unordered_set<std::string> SENSITIVE_CONFIG_KEYS = {
+    "rootCertData", "certData", "keyData", "passphrase"
+};
+
+static nlohmann::json RedactSensitiveMetricConfig(nlohmann::json config)
+{
+    if (!config.is_object()) {
+        return config;
+    }
+    for (auto &[key, value] : config.items()) {
+        if (SENSITIVE_CONFIG_KEYS.find(key) != SENSITIVE_CONFIG_KEYS.end()) {
+            value = "***";
+        } else if (value.is_object()) {
+            value = RedactSensitiveMetricConfig(value);
+        }
+    }
+    return config;
+}
 
 static std::string GetLibraryPath(const std::string &exporterType)
 {
@@ -71,6 +89,8 @@ static std::string GetLibraryPath(const std::string &exporterType)
         }
         if (exporterType == FILE_EXPORTER) {
             filePath = std::string(realLibPath) + "/libobservability-metrics-file-exporter.so";
+        } else if (exporterType == PROMETHEUS_PULL_EXPORTER) {
+            filePath = std::string(realLibPath) + "/libobservability-prometheus-pull-exporter.so";
         } else if (exporterType == PROMETHEUS_PUSH_EXPORTER) {
             filePath = std::string(realLibPath) + "/libobservability-prometheus-push-exporter.so";
         } else if (exporterType == OPENTELEMETRY_EXPORTER) {
@@ -184,8 +204,8 @@ std::shared_ptr<MetricsExporters::Exporter> MetricsAdapter::InitHttpExporter(con
         }
 
         try {
-            // print before set ssl config, which can't be printed
-            YRLOG_INFO("metrics http exporter for backend {}, initConfig: {}", backendName, initConfigJson.dump());
+            YRLOG_INFO("metrics http exporter for backend {}, initConfig: {}", backendName,
+                       RedactSensitiveMetricConfig(initConfigJson).dump());
         } catch (std::exception &e) {
             YRLOG_ERROR("dump initConfigJson failed, error: {}", e.what());
         }
@@ -275,7 +295,7 @@ void MetricsAdapter::SetImmediatelyExporters(const std::shared_ptr<observability
             auto processor =
                     std::make_shared<MetricsSdk::ImmediatelyExportProcessor>(std::move(exporter), exportConfigs);
             mp->AddMetricProcessor(std::move(processor));
-        } else if (key == PROMETHEUS_PUSH_EXPORTER) {
+        } else if (key == PROMETHEUS_PUSH_EXPORTER || key == PROMETHEUS_PULL_EXPORTER) {
             auto &&exporter = InitHttpExporter(key, backendName, value, sslCertConfig);
             if (exporter == nullptr) {
                 continue;

@@ -35,7 +35,7 @@ const uint32_t MILLISECONDS_PRE_SECOND = 1000;
 const int EXCEPTION_DIR_LEN = 9;
 const std::string RUNTIME_UUID_PREFIX = "runtime-";
 const std::string RUNTIME_LOG_REGEX_PATTERN =
-    "(" + RUNTIME_UUID_PREFIX + "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})";
+    "(" + RUNTIME_UUID_PREFIX + "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(-[0-9a-f]{12})?)";
 const std::regex JAVA_RUNTIME_LOG_REGEX_PATTERN_REGEX(RUNTIME_LOG_REGEX_PATTERN);
 const std::string PYTHON_RUNTIME_LOG_REGEX_PATTERN =
     "^" + RUNTIME_LOG_REGEX_PATTERN + "(-\\d{14})?(\\.\\d*)?\\.log(\\.gz)?(\\.\\d+)?$";

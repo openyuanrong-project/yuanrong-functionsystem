@@ -502,6 +502,22 @@ TEST_F(FunctionAgentUtilsTest, AddDefaultEnvWithDELEGATE_ENV_VAR)
     EXPECT_EQ((*runtimeConf2.mutable_posixenvs()).size(), size_t{1});
 }
 
+TEST_F(FunctionAgentUtilsTest, AddDefaultEnvInjectsPodMetadataForAllRuntimes)
+{
+    litebus::os::SetEnv("POD_NAME", "pod-name");
+    litebus::os::SetEnv("POD_NAMESPACE", "pod-namespace");
+
+    auto deployInstanceRequest = std::make_shared<functionsystem::messages::DeployInstanceRequest>();
+    messages::RuntimeConfig runtimeConf;
+    functionsystem::function_agent::AddDefaultEnv(deployInstanceRequest, runtimeConf);
+
+    EXPECT_EQ((*runtimeConf.mutable_posixenvs())["POD_NAME"], "pod-name");
+    EXPECT_EQ((*runtimeConf.mutable_posixenvs())["POD_NAMESPACE"], "pod-namespace");
+
+    litebus::os::UnSetEnv("POD_NAME");
+    litebus::os::UnSetEnv("POD_NAMESPACE");
+}
+
 TEST_F(FunctionAgentUtilsTest, SensitiveValueHashTest)
 {
     const std::string plaint = "secret-key";

@@ -71,7 +71,8 @@ func TestCreateFunctionInfo(t *testing.T) {
 				SchedulePolicies: []model.ResourceAffinitySelector{
 					{Group: "rg1"},
 				},
-				PoolID: "pool1",
+				PoolID:     "pool1",
+				PriorityAZ: "az1",
 			},
 			Name:    "successFunc",
 			Runtime: "java1.8",
@@ -126,6 +127,7 @@ func TestCreateFunctionInfo(t *testing.T) {
 			t.Errorf("CreateFunctionInfo got version empty %s", got.VersionNumber)
 		}
 		assert.Equal(t, got.Runtime, "java8")
+		assert.Equal(t, "az1", got.PriorityAZ)
 	})
 	// test layer
 	tt = tests[1]
@@ -177,6 +179,7 @@ func TestUpdateFunctionInfo(t *testing.T) {
 						Handler:       "main",
 						Environment:   nil,
 						Description:   "test update success",
+						PriorityAZ:    "az2",
 					},
 					RevisionID: "",
 				}},
@@ -204,6 +207,7 @@ func TestUpdateFunctionInfo(t *testing.T) {
 		getFunc = mockGetFunc(t, tt.args.ctx, tt.args.f.FunctionName)
 		assert.NotEqual(t, createReq.Timeout, getFunc.Timeout)
 		assert.Equal(t, int64(100), getFunc.Timeout)
+		assert.Equal(t, "az2", getFunc.PriorityAZ)
 		assert.Nil(t, err)
 		err = DeleteResponse(tt.args.ctx, "0-test-successFunc", utils.GetDefaultVersion(), "")
 		txn := storage.GetTxnByKind(tt.args.ctx, "")

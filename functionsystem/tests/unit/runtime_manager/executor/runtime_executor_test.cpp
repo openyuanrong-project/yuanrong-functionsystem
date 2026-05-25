@@ -19,6 +19,7 @@
 #include <gmock/gmock.h>
 #include <yaml-cpp/yaml.h>
 
+#include <cstdio>
 #include <fstream>
 
 #include "common/constants/constants.h"
@@ -43,6 +44,10 @@ const int PORT_NUM = 1000;
 const std::string testDeployDir = "/tmp/layer/func/bucket-test-log1/yr-test-runtime-executor";
 const std::string funcObj = testDeployDir + "/" + "funcObj";
 const std::string TEST_TENANT_ID = "tenant001";
+const std::string TEST_RUNTIME_METRICS_CONFIG_FILE = "/tmp/runtime_executor_metrics_config.json";
+const std::string TEST_METRICS_ROOT_CERT_FILE = "/tmp/runtime_executor_metrics_root_cert.pem";
+const std::string TEST_METRICS_CERT_FILE = "/tmp/runtime_executor_metrics_cert.pem";
+const std::string TEST_METRICS_KEY_FILE = "/tmp/runtime_executor_metrics_key.pem";
 const std::vector<std::string> condaEnvCreateResult{
     "Channels:",
     " - conda-forge",
@@ -145,6 +150,8 @@ public:
         executor_ = std::make_shared<MockRuntimeExecutor>("RuntimeExecutorTestActor", mockAgent_->GetAID());
         litebus::Spawn(executor_);
         litebus::os::SetEnv("YR_BARE_MENTAL", "1");
+        litebus::os::UnSetEnv("RUNTIME_METRICS_CONFIG");
+        litebus::os::UnSetEnv("RUNTIME_METRICS_CONFIG_FILE");
 
         // memory origin env
         auto optionEnv = litebus::os::GetEnv("PATH");
@@ -161,6 +168,12 @@ public:
         litebus::Terminate(mockAgent_->GetAID());
         litebus::Await(executor_->GetAID());
         litebus::os::SetEnv("PATH", env_);
+        litebus::os::UnSetEnv("RUNTIME_METRICS_CONFIG");
+        litebus::os::UnSetEnv("RUNTIME_METRICS_CONFIG_FILE");
+        (void)std::remove(TEST_RUNTIME_METRICS_CONFIG_FILE.c_str());
+        (void)std::remove(TEST_METRICS_ROOT_CERT_FILE.c_str());
+        (void)std::remove(TEST_METRICS_CERT_FILE.c_str());
+        (void)std::remove(TEST_METRICS_KEY_FILE.c_str());
         pidArray.clear();
     }
 
@@ -195,6 +208,147 @@ protected:
     std::string env_;
     std::vector<pid_t> pidArray;
 };
+
+TEST_F(RuntimeExecutorTest, FillMetricsTLSConfigFromEnvCertData)
+{
+    litebus::os::SetEnv("RUNTIME_METRICS_CONFIG", R"({
+        "backends": [{
+            "immediatelyExport": {
+                "exporters": [{
+                    "prometheusPullExporter": {
+                        "enable": true,
+                        "initConfig": {
+                            "isSSLEnable": true,
+                            "rootCertData": "root-data",
+                            "certData": "cert-data",
+                            "keyData": "key-data"
+                        }
+                    }
+                }]
+            }
+        }]
+    })");
+
+    ::messages::TLSConfig tlsConfig;
+    auto status = executor_->ProtectedFillMetricsTLSConfig(tlsConfig);
+
+    EXPECT_TRUE(status.IsOk());
+    EXPECT_EQ(tlsConfig.metricsrootcertdata(), "root-data");
+    EXPECT_EQ(tlsConfig.metricscertdata(), "cert-data");
+    EXPECT_EQ(tlsConfig.metricskeydata(), "key-data");
+}
+
+TEST_F(RuntimeExecutorTest, FillMetricsTLSConfigClearsIncompleteCertData)
+{
+    litebus::os::SetEnv("RUNTIME_METRICS_CONFIG", R"({
+        "backends": [{
+            "immediatelyExport": {
+                "exporters": [{
+                    "prometheusPullExporter": {
+                        "enable": true,
+                        "initConfig": {
+                            "isSSLEnable": true,
+                            "certData": "cert-data"
+                        }
+                    }
+                }]
+            }
+        }]
+    })");
+
+    ::messages::TLSConfig tlsConfig;
+    auto status = executor_->ProtectedFillMetricsTLSConfig(tlsConfig);
+
+    EXPECT_TRUE(status.IsOk());
+    EXPECT_TRUE(tlsConfig.metricsrootcertdata().empty());
+    EXPECT_TRUE(tlsConfig.metricscertdata().empty());
+    EXPECT_TRUE(tlsConfig.metricskeydata().empty());
+}
+
+TEST_F(RuntimeExecutorTest, FillMetricsTLSConfigIgnoresDisabledSsl)
+{
+    litebus::os::SetEnv("RUNTIME_METRICS_CONFIG", R"({
+        "backends": [{
+            "immediatelyExport": {
+                "exporters": [{
+                    "prometheusPullExporter": {
+                        "enable": true,
+                        "initConfig": {
+                            "isSSLEnable": false,
+                            "rootCertData": "root-data",
+                            "certData": "cert-data",
+                            "keyData": "key-data"
+                        }
+                    }
+                }]
+            }
+        }]
+    })");
+
+    ::messages::TLSConfig tlsConfig;
+    auto status = executor_->ProtectedFillMetricsTLSConfig(tlsConfig);
+
+    EXPECT_TRUE(status.IsOk());
+    EXPECT_TRUE(tlsConfig.metricsrootcertdata().empty());
+    EXPECT_TRUE(tlsConfig.metricscertdata().empty());
+    EXPECT_TRUE(tlsConfig.metricskeydata().empty());
+}
+
+TEST_F(RuntimeExecutorTest, FillMetricsTLSConfigFromConfigFileCertFiles)
+{
+    {
+        std::ofstream rootCert(TEST_METRICS_ROOT_CERT_FILE);
+        rootCert << "root";
+    }
+    {
+        std::ofstream cert(TEST_METRICS_CERT_FILE);
+        cert << "cert";
+    }
+    {
+        std::ofstream key(TEST_METRICS_KEY_FILE);
+        key << "key";
+    }
+    {
+        std::ofstream config(TEST_RUNTIME_METRICS_CONFIG_FILE);
+        config << R"({
+            "backends": [{
+                "immediatelyExport": {
+                    "exporters": [{
+                        "prometheusPullExporter": {
+                            "enable": true,
+                            "initConfig": {
+                                "isSSLEnable": true,
+                                "rootCertFile": ")" << TEST_METRICS_ROOT_CERT_FILE << R"(",
+                                "certFile": ")" << TEST_METRICS_CERT_FILE << R"(",
+                                "keyFile": ")" << TEST_METRICS_KEY_FILE << R"("
+                            }
+                        }
+                    }]
+                }
+            }]
+        })";
+    }
+    litebus::os::SetEnv("RUNTIME_METRICS_CONFIG_FILE", TEST_RUNTIME_METRICS_CONFIG_FILE);
+
+    ::messages::TLSConfig tlsConfig;
+    auto status = executor_->ProtectedFillMetricsTLSConfig(tlsConfig);
+
+    EXPECT_TRUE(status.IsOk());
+    EXPECT_EQ(tlsConfig.metricsrootcertdata(), "cm9vdA==");
+    EXPECT_EQ(tlsConfig.metricscertdata(), "Y2VydA==");
+    EXPECT_EQ(tlsConfig.metricskeydata(), "a2V5");
+}
+
+TEST_F(RuntimeExecutorTest, FillMetricsTLSConfigFromStsP12DefaultReturnsOk)
+{
+    ::messages::TLSConfig tlsConfig;
+    auto status = executor_->ProtectedFillMetricsTLSConfigFromStsP12(tlsConfig);
+
+    EXPECT_TRUE(status.IsOk());
+    EXPECT_TRUE(tlsConfig.metricsrootcertdata().empty());
+    EXPECT_TRUE(tlsConfig.metricscertdata().empty());
+    EXPECT_TRUE(tlsConfig.metricskeydata().empty());
+}
 
 TEST_F(RuntimeExecutorTest, VerifyCustomJvmArgs_ShouldReturnValidArgs_WhenArgsAreValid)
 {
@@ -545,7 +699,7 @@ TEST_F(RuntimeExecutorTest, StartInstanceWithSubDirTest)
     stopRequest->set_requestid("test_requestID");
     stopRequest->set_runtimeid(instanceResponse.mutable_startruntimeinstanceresponse()->runtimeid());
     auto stopResponse = executor_->StopInstance(stopRequest);
-    EXPECT_EQ(stopResponse.StatusCode(), SUCCESS);
+    EXPECT_EQ(stopResponse.Get().StatusCode(), SUCCESS);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     EXPECT_FALSE(FileExists("/test_instanceID"));
 
@@ -569,7 +723,7 @@ TEST_F(RuntimeExecutorTest, StartInstanceWithSubDirTest)
     instanceResponse = future.Get();
     stopRequest->set_runtimeid(instanceResponse.mutable_startruntimeinstanceresponse()->runtimeid());
     stopResponse = executor_->StopInstance(stopRequest);
-    EXPECT_EQ(stopResponse.StatusCode(), SUCCESS);
+    EXPECT_EQ(stopResponse.Get().StatusCode(), SUCCESS);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     EXPECT_FALSE(FileExists("/tmp/test_instanceID"));
 
@@ -621,7 +775,7 @@ TEST_F(RuntimeExecutorTest, StopInstanceTest)
     stopRequest->set_runtimeid(resRuntimeID);
 
     auto stopResponse = executor_->StopInstance(stopRequest);
-    EXPECT_EQ(stopResponse.StatusCode(), SUCCESS);
+    EXPECT_EQ(stopResponse.Get().StatusCode(), SUCCESS);
     EXPECT_FALSE(executor_->IsRuntimeActive(resRuntimeID));
     EXPECT_FALSE(executor_->IsRuntimeActiveByPid(resPid));
 }
@@ -633,7 +787,7 @@ TEST_F(RuntimeExecutorTest, StopInstanceFailTest)
     request->set_requestid("test_requestID");
 
     auto response = executor_->StopInstance(request);
-    EXPECT_EQ(response.StatusCode(), RUNTIME_MANAGER_RUNTIME_PROCESS_NOT_FOUND);
+    EXPECT_EQ(response.Get().StatusCode(), RUNTIME_MANAGER_RUNTIME_PROCESS_NOT_FOUND);
 }
 
 /**
@@ -2057,10 +2211,10 @@ TEST_F(RuntimeExecutorTest, EpollRedirectorStdLogRollingCompressTest)
     // 1.init StdRedirectParam
     std::string command = "rm -rf /home/snuser/instances/test_runtime_id*";
     (void)std::system(command.c_str());
-    executor_->config_.userLogBufferFlushThreshold_ = 1024;
-    executor_->config_.userLogAutoFlushIntervalMs_ = 10;
-    executor_->config_.userLogRollingSizeLimitMb_ = 1;
-    executor_->config_.userLogRollingFileCountLimit_ = 3;
+    executor_->config_.userLogBufferFlushThreshold = 1024;
+    executor_->config_.userLogAutoFlushIntervalMs = 10;
+    executor_->config_.userLogRollingSizeLimitMb = 1;
+    executor_->config_.userLogRollingFileCountLimit = 3;
 
     // 2.StartRuntimeStdRedirection
     runtime_manager::Flags flags;

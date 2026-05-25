@@ -16,6 +16,8 @@
 
 #include "metrics/exporters/prometheus_push_exporter/prometheus_push_exporter.h"
 
+#include "metrics/exporters/common/prometheus_text_serializer.h"
+
 #include <functional>
 #include <future>
 #include <iostream>

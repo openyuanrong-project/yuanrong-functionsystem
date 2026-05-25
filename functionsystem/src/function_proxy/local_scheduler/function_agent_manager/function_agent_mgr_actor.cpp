@@ -1072,6 +1072,11 @@ void FunctionAgentMgrActor::UpdateAgentStatus(const litebus::AID &from, string &
                                       "exited agent({}) is going to be deleted.", localScheSrv, req);
             }
             break;
+        case FUNC_AGENT_EXITING:
+            if (auto resourceView = resourceView_.lock()) {
+                (void)resourceView->DeleteResourceUnit(agentID);
+            }
+            break;
         case FUNC_AGENT_EXITED:
         case RUNTIME_MANAGER_REGISTER_FAILED:
             CleanupAgentResources(agentID, enableTenantAffinity_,

@@ -1717,6 +1717,43 @@ TEST_F(DISABLED_InstanceManagerTest, FunctionMetaSyncerTest)  // NOLINT
         ASSERT_EQ(killReq.req().instanceid(), instanceIDA);
     }
 
+    {
+        // driver instance will not be deleted when metadata not found
+        instanceMgrActor->member_->funcMeta2InstanceIDs.clear();
+        std::string instanceID = "instanceDriver";
+        auto instanceInfo =
+            GenInstanceInfo(instanceID, "funcAgent",
+                            "456/0-driver-default/$latest", InstanceState::RUNNING);
+        instanceInfo.set_functionproxyid(NODE_ID_1);
+        instanceInfo.set_jobid("job-1");
+        instanceInfo.mutable_extensions()->emplace("source", "driver");
+        auto key = GenInstanceKey("456/0-driver-default/$latest", instanceID,
+                                   instanceID).Get();
+ 
+        instanceMgrActor->OnInstancePut(key, std::make_shared<resource_view::InstanceInfo>(instanceInfo));
+        // driver instance will not be put into funcMeta2InstanceIDs
+        ASSERT_AWAIT_TRUE(
+            [&]() { return instanceMgrActor->member_->funcMeta2InstanceIDs["456/0-driver-default/$latest"].size() == 0; });
+ 
+        auto meta = R"({"funcMetaData":{"layers":[],"name":"0@faaspy@hello","description":"empty function","functionUrn":"sn:cn:yrk:12345678901234561234567890123456:function:0@faaspy@hello","reversedConcurrency":0})";
+        auto funcKey = R"(/yr/functions/business/yrk/tenant/12345678901234561234567890123456/function/0@faaspy@hello/version/latest)";
+        KeyValue getKeyValue;
+        getKeyValue.set_key(funcKey);
+        getKeyValue.set_value(meta);
+ 
+        litebus::Future<std::shared_ptr<GetResponse>> getResponseFuture;
+        std::shared_ptr<GetResponse> rep = std::make_shared<GetResponse>();
+        rep->status = Status::OK();
+        rep->kvs.emplace_back(getKeyValue);
+        getResponseFuture.SetValue(rep);
+        EXPECT_CALL(*mockMetaStoreClient, Get).WillOnce(testing::Return(getResponseFuture));
+        // will not call KillInstanceWithRetry
+        EXPECT_CALL(*scheduler, GetLocalAddress).Times(0);
+        auto future = instanceMgrActor->FunctionMetaSyncer();
+        ASSERT_AWAIT_READY(future);
+        ASSERT_TRUE(future.Get().status.IsOk());
+    }
+    
     instanceMgrDriver->Stop();
     instanceMgrDriver->Await();
 }

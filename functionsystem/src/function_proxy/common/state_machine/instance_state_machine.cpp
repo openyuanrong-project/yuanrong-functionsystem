@@ -186,7 +186,7 @@ litebus::Future<TransitionResult> InstanceStateMachine::PersistenceInstanceInfo(
         .Then([requestID(newInstanceInfo.requestid()), instanceID(instanceID_), context,
                self(shared_from_this())](const TransitionResult &result) -> litebus::Future<TransitionResult> {
             if (!result.status.IsOk()) {
-                YRLOG_DEBUG("{}|transition instance({}) state failed.", requestID, instanceID);
+                YRLOG_ERROR("{}|transition instance({}) state failed.", requestID, instanceID);
                 self->TagSaved();
                 return result;
             }

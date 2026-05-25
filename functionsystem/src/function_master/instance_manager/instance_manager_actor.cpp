@@ -457,7 +457,8 @@ void InstanceManagerActor::OnInstancePut(const std::string &key,
     if (IsInstanceManagedByJob(instance)) {
         member_->jobID2InstanceIDs[instance->jobid()].emplace(instance->instanceid());
     }
-    if (const auto funcKey = GetFuncKeyFromInstancePath(key); !funcKey.empty()) {
+    const auto funcKey = GetFuncKeyFromInstancePath(key);
+    if (!funcKey.empty() && !IsDriver(instance)) {
         member_->funcMeta2InstanceIDs[funcKey].emplace(instance->instanceid());
     }
     // 1. You can determine whether a node is faulty based on the faulty node record and delete the function instances

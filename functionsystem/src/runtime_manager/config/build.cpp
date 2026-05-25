@@ -80,7 +80,8 @@ const std::vector<std::string> PRE_CONFIG_ENV = {
 };
 
 const std::unordered_set<std::string> USER_ENV_OVERWRITE_WHITELIST = {
-    PYTHONUNBUFFERED
+    PYTHONUNBUFFERED,
+    ENABLE_METRICS
 };
 
 Envs GenerateEnvs(const RuntimeConfig &config, const std::shared_ptr<messages::StartInstanceRequest> &request,

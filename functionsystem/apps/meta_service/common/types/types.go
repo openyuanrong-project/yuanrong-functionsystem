@@ -246,6 +246,8 @@ type ExtendedMetaData struct {
 	RaspConfig             RaspConfig             `json:"rasp_config"`
 	ServeDeploySchema      ServeDeploySchema      `json:"serveDeploySchema" valid:"optional"`
 	ImagePullConfig        ImagePullConfig        `json:"imagePullConfig,omitempty"`
+	PriorityAZ             string                 `json:"priority_az,omitempty"`
+	EnableMetrics          bool                   `json:"enable_metrics,omitempty"`
 	EnableAgentSession     bool                   `json:"enable_agent_session,omitempty"`
 }
 

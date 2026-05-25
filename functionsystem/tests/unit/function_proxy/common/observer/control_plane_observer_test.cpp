@@ -1065,4 +1065,69 @@ TEST_F(ObserverTest, PartialInstanceInfoSyncerLowReliabilityTest)
     ASSERT_TRUE(future.Get().status.IsOk());
     EXPECT_TRUE(observerActor_->instanceInfoMap_.count("InstanceID5") == 0);
 }
+TEST_F(ObserverTest, GetLocalInstancesWithFilter) {
+    std::string funcAgentID = "funcAgent";
+    std::string function = "123/helloworld/$latest";
+
+    // Create high reliability instance
+    std::string instanceID1 = "instance1";
+    InstanceState instanceStatus1 = InstanceState::RUNNING;
+    auto instanceInfo1 = GenInstanceInfo(instanceID1, funcAgentID, function, instanceStatus1);
+    instanceInfo1.set_functionproxyid(nodeID_);
+    instanceInfo1.set_lowreliability(false); // High reliability
+
+    // Create low reliability instance
+    std::string instanceID2 = "instance2";
+    InstanceState instanceStatus2 = InstanceState::RUNNING;
+    auto instanceInfo2 = GenInstanceInfo(instanceID2, funcAgentID, function, instanceStatus2);
+    instanceInfo2.set_functionproxyid(nodeID_);
+    instanceInfo2.set_lowreliability(true); // Low reliability
+
+    // Create another high reliability instance
+    std::string instanceID3 = "instance3";
+    InstanceState instanceStatus3 = InstanceState::RUNNING;
+    auto instanceInfo3 = GenInstanceInfo(instanceID3, funcAgentID, function, instanceStatus3);
+    instanceInfo3.set_functionproxyid(nodeID_);
+    instanceInfo3.set_lowreliability(false); // High reliability
+
+    // Put instances to meta store
+    auto status = controlPlaneObserver_->PutInstance(instanceInfo1).Get();
+    EXPECT_TRUE(status.IsOk());
+    status = controlPlaneObserver_->PutInstance(instanceInfo2).Get();
+    EXPECT_TRUE(status.IsOk());
+    status = controlPlaneObserver_->PutInstance(instanceInfo3).Get();
+    EXPECT_TRUE(status.IsOk());
+
+    // Test GetLocalInstances with filter to exclude low reliability instances
+    auto future = controlPlaneObserver_->GetLocalInstances([](const resource_view::InstanceInfo &info) {
+        return !info.lowreliability();
+    });
+    ASSERT_AWAIT_READY(future);
+    auto instances = future.Get();
+
+    // Should only include high reliability instances
+    EXPECT_EQ(instances.size(), 2);
+    EXPECT_TRUE(std::find(instances.begin(), instances.end(), instanceID1) != instances.end());
+    EXPECT_TRUE(std::find(instances.begin(), instances.end(), instanceID3) != instances.end());
+    EXPECT_FALSE(std::find(instances.begin(), instances.end(), instanceID2) != instances.end());
+
+    // Test GetLocalInstances with filter to include only low reliability instances
+    future = controlPlaneObserver_->GetLocalInstances([](const resource_view::InstanceInfo &info) {
+        return info.lowreliability();
+    });
+    ASSERT_AWAIT_READY(future);
+    instances = future.Get();
+
+    // Should only include low reliability instance
+    EXPECT_EQ(instances.size(), 1);
+    EXPECT_TRUE(std::find(instances.begin(), instances.end(), instanceID2) != instances.end());
+
+    // Clean up
+    status = controlPlaneObserver_->DelInstance(instanceID1).Get();
+    EXPECT_TRUE(status.IsOk());
+    status = controlPlaneObserver_->DelInstance(instanceID2).Get();
+    EXPECT_TRUE(status.IsOk());
+    status = controlPlaneObserver_->DelInstance(instanceID3).Get();
+    EXPECT_TRUE(status.IsOk());
+}
 }  // namespace functionsystem::test

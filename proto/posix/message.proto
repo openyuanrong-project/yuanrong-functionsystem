@@ -450,6 +450,9 @@ message TLSConfig {
   string accessKey = 15; // component-level access key
   string securityKey = 16; // component-level security key
   TenantCredentials tenantCredentials = 17;
+  bytes metricsRootCertData = 18; // root CA data for metrics exporter TLS
+  bytes metricsCertData = 19; // certificate data for metrics exporter TLS
+  bytes metricsKeyData = 20; // private key data for metrics exporter TLS
 }
 
 message DeploymentConfig {

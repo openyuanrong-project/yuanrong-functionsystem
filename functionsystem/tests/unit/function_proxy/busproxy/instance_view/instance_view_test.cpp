@@ -167,4 +167,39 @@ TEST_F(InstanceViewTest, InstanceStateChange)
     ASSERT_AWAIT_TRUE([=]() -> bool { return litebus::GetActor(aid) == nullptr; });
 }
 
+/**
+ * Feature: Subscribe to instance in EVICTING state
+ * Description: Verify subscribing to an instance that is in EVICTING state
+ * Steps:
+ * 1. Create parent instance
+ * 2. Create child instance in EVICTING state
+ * 3. Subscribe parent to child
+ * Expectation: Subscriber receives reject notification
+ */
+TEST_F(InstanceViewTest, SubscribeToEvictingInstance)
+{
+    InstanceProxy::BindObserver(std::make_shared<MockDataPlaneObserver>(instanceView_));
+    auto localClient = std::make_shared<proxy::Client>(litebus::AID());
+    proxyView_->Update(nodeID, localClient);
+
+    std::string parent = "parent-evicting";
+    std::string child = "child-evicting";
+    
+    // Create parent instance
+    UpdateInstance(parent, "driver", nodeID, nodeID);
+    
+    // Create child in EVICTING state
+    auto instanceInfo = GenInstanceInfo(child, parent, nodeID, InstanceState::EVICTING);
+    instanceInfo.mutable_instancestatus()->set_errcode(common::ERR_INSTANCE_EVICTED);
+    instanceInfo.mutable_instancestatus()->set_msg("Instance is being evicted");
+    instanceView_->Update(child, instanceInfo, false);
+
+    // Subscribe parent to evicting child
+    auto ret = instanceView_->SubscribeInstanceEvent(parent, child, false);
+    EXPECT_TRUE(ret.IsOk());
+
+    // Cleanup
+    instanceView_->Delete(child, -1);
+    instanceView_->Delete(parent, -1);
+}
 }  // namespace functionsystem::test

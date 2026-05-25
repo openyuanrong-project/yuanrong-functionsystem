@@ -968,7 +968,7 @@ litebus::Option<std::shared_ptr<V1DeleteOptions>> ScalerActor::GetPodDeleteOptio
 {
     std::shared_ptr<V1DeleteOptions> deleteOptions = std::make_shared<V1DeleteOptions>();
     if (isForce) {
-        deleteOptions->SetGracePeriodSeconds(DEFAULT_GRACE_PERIOD_SECONDS);
+        deleteOptions->SetGracePeriodSeconds(member_->gracePeriodSeconds);
     }
     deleteOptions->SetPropagationPolicy("Foreground");
     return litebus::Option<std::shared_ptr<V1DeleteOptions>>(deleteOptions);

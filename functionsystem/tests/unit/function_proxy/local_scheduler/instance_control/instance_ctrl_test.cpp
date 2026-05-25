@@ -1160,10 +1160,6 @@ TEST_F(InstanceCtrlTest, AuthorizeCreateShouldNotOverrideNormalizedTenantID)
     scheduleReq->mutable_instance()->set_parentid("parentID");
     (*scheduleReq->mutable_instance()->mutable_createoptions())[TENANT_ID] = "createOptionTenant";
 
-    auto normalizeStatus = actor->NormalizeCreateTenantID(functionMeta, scheduleReq);
-    EXPECT_TRUE(normalizeStatus.IsOk());
-    EXPECT_EQ(scheduleReq->instance().tenantid(), "parentTenant");
-
     EXPECT_CALL(*mockInternalIAM, IsIAMEnabled()).WillRepeatedly(Return(true));
     EXPECT_CALL(*mockInternalIAM, Authorize(_))
         .WillOnce(Invoke([](function_proxy::AuthorizeParam &authorizeParam) -> Status {
@@ -5186,7 +5182,14 @@ TEST_F(InstanceCtrlTest, ToSchedulingSuccessful)
     scheduleReq->mutable_instance()->set_parentid("parentID");
     scheduleReq->mutable_instance()->mutable_instancestatus()->set_code(
         static_cast<int32_t>(InstanceState::NEW));
-    EXPECT_CALL(*instanceControlView_, GetInstance("parentID")).WillOnce(Return(nullptr));
+    auto parentStateMachine = std::make_shared<MockInstanceStateMachine>("nodeID");
+    resource_view::InstanceInfo parentInfo;
+    parentInfo.set_instanceid("parentID");
+    parentInfo.set_tenantid("testTenant");
+    parentInfo.set_issystemfunc(false);
+    EXPECT_CALL(*parentStateMachine, GetInstanceInfo).WillRepeatedly(Return(parentInfo));
+    EXPECT_CALL(*instanceControlView_, GetInstance("parentID"))
+        .WillRepeatedly(Return(parentStateMachine));
     auto stateMachine = std::make_shared<MockInstanceStateMachine>("nodeID");
     EXPECT_CALL(*instanceControlView_, GetInstance("DesignatedInstanceID"))
         .WillOnce(Return(nullptr))

@@ -257,24 +257,35 @@ func buildBasicUpdateFunctionVersion(request model.FunctionUpdateRequest,
 	}
 	fv.FunctionVersion.PoolLabel = poolLabel
 	fv.FunctionVersion.PoolID = request.PoolID
+	fv.FunctionVersion.EnableMetrics = request.EnableMetrics
 	fv.FunctionVersion.EnableAgentSession = request.EnableAgentSession
+	fv.FunctionVersion.PriorityAZ = request.PriorityAZ
 	fv.FunctionVersion.IdleTime = request.IdleTime
 	fv.FunctionVersion.IsFuncPublic = request.IsFuncPublic
+	setFunctionS3CodePath(fv, request)
+	fv.FunctionVersion.WarmupType = request.WarmupType
+	fv.FunctionVersion.RootfsSpecMeta = request.RootfsSpecMeta
+	logRootfsUpdate(request)
+	setFunctionScaleConfig(fv, request)
+}
+
+func setFunctionS3CodePath(fv *storage.FunctionVersionValue, request model.FunctionUpdateRequest) {
 	fv.FunctionVersion.Package.BucketID = request.S3CodePath.BucketID
 	fv.FunctionVersion.Package.ObjectID = request.S3CodePath.ObjectID
 	fv.FunctionVersion.Package.BucketUrl = request.S3CodePath.BucketUrl
 	fv.FunctionVersion.Package.Token = request.S3CodePath.Token
 	fv.FunctionVersion.Package.Signature = request.S3CodePath.Sha512
-	fv.FunctionVersion.WarmupType = request.WarmupType
-	fv.FunctionVersion.RootfsSpecMeta = request.RootfsSpecMeta
+}
 
-	// Log rootfs specification update if provided
+func logRootfsUpdate(request model.FunctionUpdateRequest) {
 	if request.RootfsSpecMeta.Type != "" {
 		log.GetLogger().Infof("updating function rootfs: type=%s, runtime=%s, imageurl=%s, readonly=%v",
 			request.RootfsSpecMeta.Type, request.RootfsSpecMeta.Runtime,
 			request.RootfsSpecMeta.ImageURL, request.RootfsSpecMeta.ReadOnly)
 	}
+}
 
+func setFunctionScaleConfig(fv *storage.FunctionVersionValue, request model.FunctionUpdateRequest) {
 	fv.FunctionVersion.ScalePolicy = request.ScalePolicy
 	fv.FunctionVersion.SchedulePolicy = request.SchedulePolicy
 	fv.FunctionVersion.CustomContainerConfig = request.ExtendedMetaData.CustomContainerConfig
@@ -489,41 +500,43 @@ func getFunctionVersion(request model.FunctionCreateRequest, env string,
 				Signature: request.S3CodePath.Sha512,
 			},
 		},
-		RevisionID:      utils.GetUTCRevisionID(),
-		Handler:         request.Handler,
-		CPU:             request.CPU,
-		Memory:          request.Memory,
-		Runtime:         utils.GetRuntimeName(request.Kind, request.Runtime),
-		Timeout:         request.Timeout,
-		Version:         utils.GetDefaultVersion(),
-		Environment:     env,
-		CustomResources: customResources,
-		Description:     utils.GetDefaultVersion(),
-		PublishTime:     utils.NowTimeF(),
-		MinInstance:     w.minInstance,
-		MaxInstance:     w.maxInstance,
-		ConcurrentNum:   w.concurrentNum,
-		CacheInstance:   request.CacheInstance,
-		HookHandler:     getHookHandler(request.Kind, request.Runtime, request.Handler, request.HookHandler),
-		ExtendedHandler: request.ExtendedHandler,
-		ExtendedTimeout: request.ExtendedTimeout,
-		Device:          request.Device,
-		PoolLabel:       poolLabel,
-		PoolID:          request.PoolID,
+		RevisionID:         utils.GetUTCRevisionID(),
+		Handler:            request.Handler,
+		CPU:                request.CPU,
+		Memory:             request.Memory,
+		Runtime:            utils.GetRuntimeName(request.Kind, request.Runtime),
+		Timeout:            request.Timeout,
+		Version:            utils.GetDefaultVersion(),
+		Environment:        env,
+		CustomResources:    customResources,
+		Description:        utils.GetDefaultVersion(),
+		PublishTime:        utils.NowTimeF(),
+		MinInstance:        w.minInstance,
+		MaxInstance:        w.maxInstance,
+		ConcurrentNum:      w.concurrentNum,
+		CacheInstance:      request.CacheInstance,
+		HookHandler:        getHookHandler(request.Kind, request.Runtime, request.Handler, request.HookHandler),
+		ExtendedHandler:    request.ExtendedHandler,
+		ExtendedTimeout:    request.ExtendedTimeout,
+		Device:             request.Device,
+		PoolLabel:          poolLabel,
+		PoolID:             request.PoolID,
 		EnableAgentSession: request.EnableAgentSession,
-        IsFuncPublic:    request.IsFuncPublic,
-        IdleTime:        request.IdleTime,
-        WarmupType:      request.WarmupType,
-        RootfsSpecMeta:  request.RootfsSpecMeta,
-        ScalePolicy:     request.ScalePolicy,
-        SchedulePolicy:  request.SchedulePolicy,
-        AutoScaleConfig: storage.AutoScaleConfig{
-            SLAQuota:      request.AutoScaleConfig.SLAQuota,
-            ScaleDownTime: request.AutoScaleConfig.ScaleDownTime,
-            BurstScaleNum: request.AutoScaleConfig.BurstScaleNum,
-        },
-        CustomContainerConfig: request.ExtendedMetaData.CustomContainerConfig,
-        CustomHealthCheck:     request.ExtendedMetaData.CustomHealthCheck,
+		PriorityAZ:             request.PriorityAZ,
+		EnableMetrics:          request.EnableMetrics,
+		IsFuncPublic:           request.IsFuncPublic,
+		IdleTime:               request.IdleTime,
+		WarmupType:             request.WarmupType,
+		RootfsSpecMeta:         request.RootfsSpecMeta,
+		ScalePolicy:            request.ScalePolicy,
+		SchedulePolicy:         request.SchedulePolicy,
+		AutoScaleConfig: storage.AutoScaleConfig{
+			SLAQuota:      request.AutoScaleConfig.SLAQuota,
+			ScaleDownTime: request.AutoScaleConfig.ScaleDownTime,
+			BurstScaleNum: request.AutoScaleConfig.BurstScaleNum,
+		},
+		CustomContainerConfig:  request.ExtendedMetaData.CustomContainerConfig,
+		CustomHealthCheck:      request.ExtendedMetaData.CustomHealthCheck,
 	}
 	if request.Kind == common.Faas {
 		version.Kind = common.Faas
@@ -920,6 +933,7 @@ func buildFunctionVersionInfo(function model.Function, functionVersionURN string
 		MinInstance:        version.FunctionVersion.MinInstance,
 		MaxInstance:        version.FunctionVersion.MaxInstance,
 		ConcurrentNum:      version.FunctionVersion.ConcurrentNum,
+		EnableMetrics:      version.FunctionVersion.EnableMetrics,
 		Status:             version.FunctionVersion.Status,
 		InstanceNum:        version.FunctionVersion.InstanceNum,
 		Device:             version.FunctionVersion.Device,
@@ -1206,10 +1220,12 @@ func buildFunctionVersionEntity(key storage.FunctionVersionKey, v storage.Functi
 		MinInstance:        v.FunctionVersion.MinInstance,
 		MaxInstance:        v.FunctionVersion.MaxInstance,
 		ConcurrentNum:      v.FunctionVersion.ConcurrentNum,
+		EnableMetrics:      v.FunctionVersion.EnableMetrics,
 		FunctionVersionURN: functionVersionURN,
 		Device:             v.FunctionVersion.Device,
 		Kind:               v.FunctionVersion.Kind,
 		RootfsSpecMeta:     v.FunctionVersion.RootfsSpecMeta,
+		PriorityAZ:         v.FunctionVersion.PriorityAZ,
 	}
 	return funcVer
 }

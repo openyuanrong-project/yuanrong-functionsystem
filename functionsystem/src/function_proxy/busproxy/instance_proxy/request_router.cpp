@@ -44,7 +44,8 @@ void RequestRouter::ForwardCall(const litebus::AID &from, std::string &&, std::s
 
         SharedStreamMsg rsp =
             CreateCallResponse(common::ErrorCode::ERR_INSTANCE_NOT_FOUND,
-                               "instance is not found, maybe be not created or killed", routeReq.req().messageid());
+                               "instance is not found, maybe be not created or killed",
+                               routeReq.req().callreq().requestid());
         Send(from, "ResponseForwardCall", rsp->SerializeAsString());
         return;
     }

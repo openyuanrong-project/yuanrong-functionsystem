@@ -114,12 +114,10 @@ litebus::Future<SharedStreamMsg> RequestDispatcher::Call(const SharedStreamMsg &
     if (isReady_) {
         TriggerCall(callRequestContext->requestID);
     } else if (callReq.createoptions().contains("ENABLE_FORCE_INVOKE")) {
-        // 其他状态且 used，只处理带 ENABLE_FORCE_INVOKE 的请求
-        YRLOG_INFO("{}|force invoke enabled, will forward request to instance despite not ready.", callReq.requestid());
-        // remote instance 存在 State Machine 重建可能，不会主动触发调用
-        // remote：直接转发强制调用请求，有对端决策
-        // local：根据 used_ 状态判断是否触发调用
-        if (!local_ || used_) {
+        // 1. used instance belongs to graceful shutdown scenario, forward force invoke directly
+        // 2. not used remote instance, if aid is not empty, forward force invoke
+        if (used_ || (!local_ && !remoteAid_.Name().empty())) {
+            YRLOG_INFO("{}|forward force invoke when instance exiting.", callReq.requestid());
             TriggerCall(callRequestContext->requestID);
         }
     }
@@ -346,6 +344,17 @@ void RequestDispatcher::UpdateInfo(const std::shared_ptr<InstanceRouterInfo> &in
         return;
     }
     if (isReady_ == isReady) {
+        // 3. not ready remote instance and aid is not empty, forward force invoke
+        if (!isReady_ && !local_ && !remoteAid_.Name().empty()) {
+            const auto requests = callCache_->GetNewReqs();
+            for (auto &request : requests) {
+                auto context = callCache_->FindCallRequestContext(request);
+                if (context != nullptr && context->callRequest->has_callreq() &&
+                    context->callRequest->callreq().createoptions().contains("ENABLE_FORCE_INVOKE")) {
+                    TriggerCall(request);
+                }
+            }
+        }
         return;
     }
     isReady_ = isReady;

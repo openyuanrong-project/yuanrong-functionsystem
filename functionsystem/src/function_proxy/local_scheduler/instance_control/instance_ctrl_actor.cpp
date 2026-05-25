@@ -4145,11 +4145,6 @@ litebus::Future<messages::ScheduleResponse> InstanceCtrlActor::DoAuthorizeCreate
     const litebus::Option<FunctionMeta> &functionMeta, const std::shared_ptr<messages::ScheduleRequest> &scheduleReq,
     const std::shared_ptr<litebus::Promise<messages::ScheduleResponse>> &runtimePromise)
 {
-    auto status = NormalizeCreateTenantID(functionMeta, scheduleReq);
-    if (status.IsError()) {
-        runtimePromise->SetValue(GenScheduleResponse(status.StatusCode(), status.GetMessage(), *scheduleReq));
-        return GenScheduleResponse(status.StatusCode(), status.GetMessage(), *scheduleReq);
-    }
     return AuthorizeCreate(functionMeta, scheduleReq, runtimePromise)
         .Then(litebus::Defer(GetAID(), &InstanceCtrlActor::GetAffinity, _1, scheduleReq))
         .Then(litebus::Defer(GetAID(), &InstanceCtrlActor::DoCreateInstance, _1, functionMeta, scheduleReq,
@@ -4226,6 +4221,10 @@ litebus::Future<Status> InstanceCtrlActor::AuthorizeCreate(
     const litebus::Option<FunctionMeta> &functionMeta, const std::shared_ptr<messages::ScheduleRequest> &scheduleReq,
     const std::shared_ptr<litebus::Promise<messages::ScheduleResponse>> &runtimePromise)
 {
+    auto status = NormalizeCreateTenantID(functionMeta, scheduleReq);
+    if (status.IsError()) {
+        return status;
+    }
     // todo(lwy): should be jwt or other auth info in create options, and should not be required for system function.
     // 1. Verify the IAM function's switch.
     if (internalIAM_ == nullptr || !internalIAM_->IsIAMEnabled()) {

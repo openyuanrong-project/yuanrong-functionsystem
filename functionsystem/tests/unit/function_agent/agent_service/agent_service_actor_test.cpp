@@ -2322,7 +2322,7 @@ TEST_F(AgentServiceActorTest, GracefulShutdown)
     messages::UpdateAgentStatusResponse updateAgentStatusRsp;
     updateAgentStatusRsp.set_requestid(testFuncAgentMgrActor_->GetUpdateAgentStatusRequest()->requestid());
     EXPECT_CALL(*testFuncAgentMgrActor_, MockUpdateAgentStatusResponse)
-        .WillOnce(Return(updateAgentStatusRsp.SerializeAsString()));
+        .WillRepeatedly(Return(updateAgentStatusRsp.SerializeAsString()));
     dstActor_->TimeOutEvent();
     EXPECT_TRUE(fut.Get());
 }

@@ -103,6 +103,18 @@ public:
     }
 
     // for test
+    [[maybe_unused]] Status ProtectedFillMetricsTLSConfig(::messages::TLSConfig &tlsConfig) const
+    {
+        return FillMetricsTLSConfig(tlsConfig);
+    }
+
+    // for test
+    [[maybe_unused]] Status ProtectedFillMetricsTLSConfigFromStsP12(::messages::TLSConfig &tlsConfig) const
+    {
+        return FillMetricsTLSConfigFromStsP12(tlsConfig);
+    }
+
+    // for test
     [[maybe_unused]] void SetStdRedirectors(const std::string logName, const std::shared_ptr<StdRedirector> redirector)
     {
         stdRedirectors_[logName] = redirector;
@@ -314,6 +326,8 @@ private:
     Status WriteJsonToRuntime(const std::string &requestID, const std::string &runtimeID,
                               const ::messages::TLSConfig &tlsConfig,
                               const std::shared_ptr<litebus::Exec> execPtr) const;
+    Status FillMetricsTLSConfig(::messages::TLSConfig &tlsConfig) const;
+    Status FillMetricsTLSConfigFromStsP12(::messages::TLSConfig &tlsConfig) const;
 
     void ReportInfo(const std::string &instanceID, const std::string runtimeID, const pid_t &pid,
                     const functionsystem::metrics::MeterTitle &title);

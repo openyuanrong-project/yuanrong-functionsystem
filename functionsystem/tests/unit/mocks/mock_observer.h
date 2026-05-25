@@ -62,7 +62,8 @@ public:
     MOCK_METHOD(litebus::Future<Status>, DelInstanceEvent, (const std::string &instanceID, int64_t modRevision),
                 (override));
 
-    MOCK_METHOD(litebus::Future<std::vector<std::string>>, GetLocalInstances, (), (override));
+    MOCK_METHOD(litebus::Future<std::vector<std::string>>, GetLocalInstances, 
+        (const std::function<bool(const resource_view::InstanceInfo &)> &filter), (override));
 
     MOCK_METHOD(void, SetDriverEventCbFunc, (const function_proxy::DriverEventCbFunc &driverCbFunc), (override));
 

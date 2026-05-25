@@ -245,9 +245,13 @@ public:
 
     /**
      * get the instance located in current node or local scheduler, the driver would not be returned
-     * @return the list of instance id
-     */
-    std::vector<std::string> GetLocalInstances();
+ 	 * @param filter A function that defines the filter criteria. It takes an
+                     InstanceInfo object and returns true if the instance meets
+                     the criteria, false otherwise.
+ 	 * @return the list of instance id that match the filter
+ 	 */
+    std::vector<std::string> GetLocalInstances(
+        const std::function<bool(const resource_view::InstanceInfo &)> &filter);
 
     void Attach(const std::shared_ptr<InstanceListener> &listener) override;
 

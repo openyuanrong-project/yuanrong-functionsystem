@@ -28,6 +28,9 @@ public:
     std::string rootCertFile_;
     std::string certFile_;
     std::string keyFile_;
+    SensitiveData rootCertData_;
+    SensitiveData certData_;
+    SensitiveData keyData_;
     SensitiveData passphrase_;
 };
 }  // namespace observability::exporters::metrics

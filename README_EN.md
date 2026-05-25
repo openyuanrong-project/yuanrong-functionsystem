@@ -5,7 +5,7 @@
   [![Version](https://img.shields.io/badge/version-0.8.0.dev-orange)](https://gitcode.com/openeuler/yuanrong/releases)
   [![Documentation](https://img.shields.io/badge/docs-latest-green)](https://docs.openyuanrong.org/zh-cn/latest/index.html)
 
-  English | [简体中文](README_ZH.md)
+  English | [简体中文](README.md)
 
 </div>
 
@@ -27,9 +27,9 @@ In openYuanrong, the function is a core abstraction that extends the serverless 
 
 openYuanrong consists of three code repositories:
 
-- [yuanrong](https://github.com/openyuanrong-project/yuanrong): Refers to the multi-language function runtime.
+- [yuanrong](https://gitcode.com/openeuler/yuanrong): Refers to the multi-language function runtime.
 - yuanrong-functionsystem: The function system repository (current repository).
-- [yuanrong-datasystem](https://github.com/openyuanrong-project/yuanrong-datasystem): Refers to the data system repository.
+- [yuanrong-datasystem](https://atomgit.com/openeuler/yuanrong-datasystem): Refers to the data system repository.
 
 ## Getting Started
 

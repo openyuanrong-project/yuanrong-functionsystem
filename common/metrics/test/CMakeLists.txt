@@ -14,6 +14,7 @@ target_link_libraries(api_test PUBLIC observability-metrics-headers pthread)
 add_executable(metrics_test
         main.cpp
         sdk/meter_provider_sdk_test.cpp
+        exporters/prometheus_pull_exporter_test.cpp
         exporters/prometheus_push_exporter_test.cpp
         exporters/file_exporter_test.cpp
         exporters/ostream_exporter_test.cpp

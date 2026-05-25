@@ -101,6 +101,14 @@ void AddDiskConfig(const std::shared_ptr<messages::DeployInstanceRequest> &req, 
 
 void AddDefaultEnv(const std::shared_ptr<messages::DeployInstanceRequest> &req, messages::RuntimeConfig &runtimeConf)
 {
+    if (auto env = litebus::os::GetEnv(POD_NAME); env.IsSome()) {
+        (void)runtimeConf.mutable_posixenvs()->insert({ POD_NAME, env.Get() });
+    }
+
+    if (auto env = litebus::os::GetEnv(POD_NAMESPACE); env.IsSome()) {
+        (void)runtimeConf.mutable_posixenvs()->insert({ POD_NAMESPACE, env.Get() });
+    }
+
     // system function need k8s env
     if (req->instancelevel() == SYSTEM_FUNCTION_INSTANCE_LEVEL) {
         if (auto env = litebus::os::GetEnv(KUBERNETES_SERVICE_HOST); env.IsSome()) {
@@ -111,18 +119,7 @@ void AddDefaultEnv(const std::shared_ptr<messages::DeployInstanceRequest> &req, 
             (void)runtimeConf.mutable_posixenvs()->insert({ KUBERNETES_SERVICE_PORT, env.Get() });
         }
 
-        if (auto env = litebus::os::GetEnv(POD_NAME); env.IsSome()) {
-            (void)runtimeConf.mutable_posixenvs()->insert({ POD_NAME, env.Get() });
-        }
-
         (void)runtimeConf.mutable_posixenvs()->insert({ GODEBUG_KEY, GODEBUG_VALUE });
-    }
-
-    // custom image function need k8s env
-    if (req->createoptions().find(DELEGATE_CONTAINER) != req->createoptions().end()) {
-        if (auto env = litebus::os::GetEnv(POD_NAME); env.IsSome()) {
-            (void)runtimeConf.mutable_posixenvs()->insert({ POD_NAME, env.Get() });
-        }
     }
 
     // tenant env

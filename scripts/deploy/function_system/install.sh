@@ -132,6 +132,7 @@ function install_function_proxy() {
     LOCAL_IP="${LOCAL_IP}" \
     HOST_IP="${IP_ADDRESS}" \
     RUNTIME_METRICS_CONFIG=$RUNTIME_METRICS_CONFIG \
+    RUNTIME_METRICS_CONFIG_FILE=$RUNTIME_METRICS_CONFIG_FILE \
     INIT_LABELS=${LABELS} \
     ${bin} --address="${IP_ADDRESS}:${FUNCTION_PROXY_PORT}" --meta_store_address="${META_STORE_ADDRESS}" \
     --etcd_address="${ETCD_CLUSTER_ADDRESS}" \
@@ -192,6 +193,8 @@ function install_function_proxy() {
 
 function install_dashboard() {
   log_info "start dashboard, ip=${IP_ADDRESS}, port=${DASHBOARD_PORT}..."
+  local etcd_ssl_enable="false"
+  [ "X${ETCD_AUTH_TYPE}" = "XTLS" ] && etcd_ssl_enable="true"
   dashboard_config=${FUNCTION_SYSTEM_DIR}/config/dashboard_config.json
   install_dashboard_config=${config_install_dir}/dashboard_config.json
   cp "${dashboard_config}" "${install_dashboard_config}"
@@ -204,10 +207,10 @@ function install_dashboard() {
   sed -i "s/{frontendAddr}/${IP_ADDRESS}:${FAAS_FRONTEND_HTTP_PORT}/g" "${install_dashboard_config}"
   sed -i "s/{prometheusAddr}/${PROMETHEUS_ADDRESS}/g" "${install_dashboard_config}"
   sed -i "s/{etcdAddr}/$(echo ${ETCD_CLUSTER_ADDRESS} | sed 's/,/","/g')/g" "${install_dashboard_config}"
-  sed -i "s/{etcdSsl}/${SSL_ENABLE}/g" "${install_dashboard_config}"
+  sed -i "s/{etcdSsl}/${etcd_ssl_enable}/g" "${install_dashboard_config}"
   sed -i "s/{etcdAuthType}/${ETCD_AUTH_TYPE}/g" "${install_dashboard_config}"
   sed -i "s*{azPrefix}*${ETCD_TABLE_PREFIX}*g" "${install_dashboard_config}"
-  if [ "X${SSL_ENABLE}" = "Xtrue" ] && [ -n "${ETCD_SSL_BASE_PATH}" ]; then
+  if [ "X${ETCD_AUTH_TYPE}" = "XTLS" ] && [ -n "${ETCD_SSL_BASE_PATH}" ]; then
     sed -i "s*{etcdCAFile}*${ETCD_SSL_BASE_PATH}/${ETCD_CA_FILE}*g" ${install_dashboard_config}
     sed -i "s*{etcdCertFile}*${ETCD_SSL_BASE_PATH}/${ETCD_CLIENT_CERT_FILE}*g" ${install_dashboard_config}
     sed -i "s*{etcdKeyFile}*${ETCD_SSL_BASE_PATH}/${ETCD_CLIENT_KEY_FILE}*g" ${install_dashboard_config}
@@ -259,6 +262,8 @@ function install_dashboard() {
 
 function install_collector() {
   log_info "start collector, port=${COLLECTOR_PORT}..."
+  local etcd_ssl_enable="false"
+  [ "X${ETCD_AUTH_TYPE}" = "XTLS" ] && etcd_ssl_enable="true"
   GO_RUNTIME_BIN=${RUNTIME_HOME_DIR}/service/go/bin
   DS_SDK_GO_LIB=${DATA_SYSTEM_DIR}/sdk/go/lib
   LD_LIBRARY_PATH=${GO_RUNTIME_BIN}:${DS_SDK_GO_LIB}:${LD_LIBRARY_PATH} \
@@ -268,7 +273,7 @@ function install_collector() {
     --port="${COLLECTOR_PORT}" \
     --log_root="${LOG_ROOT}" \
     --etcd_config_servers="${ETCD_CLUSTER_ADDRESS}" \
-    --etcd_config_ssl_enable="${SSL_ENABLE}" \
+    --etcd_config_ssl_enable="${etcd_ssl_enable}" \
     --etcd_config_auth_type="${ETCD_AUTH_TYPE}" \
     --etcd_config_ca_file="${ETCD_SSL_BASE_PATH}/${ETCD_CA_FILE}" \
     --etcd_config_cert_file="${ETCD_SSL_BASE_PATH}/${ETCD_CLIENT_CERT_FILE}" \
@@ -308,7 +313,7 @@ function install_faas_frontend() {
   sed -i "s*{azPrefix}*${ETCD_TABLE_PREFIX}*g" ${install_init_frontend_config}
   sed -i "s*{sslBasePath}*${SSL_BASE_PATH}*g" ${install_init_frontend_config}
   sed -i "s*{sccBasePath}*${SCC_BASE_PATH}*g" ${install_init_frontend_config}
-  if [ "X${SSL_ENABLE}" = "Xtrue" ] && [ -n "${ETCD_SSL_BASE_PATH}" ]; then
+  if [ "X${ETCD_AUTH_TYPE}" = "XTLS" ] && [ -n "${ETCD_SSL_BASE_PATH}" ]; then
     sed -i "s*{etcdCAFile}*${ETCD_SSL_BASE_PATH}/${ETCD_CA_FILE}*g" ${install_init_frontend_config}
     sed -i "s*{etcdCertFile}*${ETCD_SSL_BASE_PATH}/${ETCD_CLIENT_CERT_FILE}*g" ${install_init_frontend_config}
     sed -i "s*{etcdKeyFile}*${ETCD_SSL_BASE_PATH}/${ETCD_CLIENT_KEY_FILE}*g" ${install_init_frontend_config}
@@ -371,7 +376,7 @@ function install_function_scheduler() {
   sed -i "s*{azPrefix}*${ETCD_TABLE_PREFIX}*g" ${install_init_scheduler_config}
   sed -i "s*{sslBasePath}*${SSL_BASE_PATH}*g" ${install_init_scheduler_config}
   sed -i "s*{sccBasePath}*${SCC_BASE_PATH}*g" ${install_init_scheduler_config}
-  if [ "X${SSL_ENABLE}" = "Xtrue" ] && [ -n "${ETCD_SSL_BASE_PATH}" ]; then
+  if [ "X${ETCD_AUTH_TYPE}" = "XTLS" ] && [ -n "${ETCD_SSL_BASE_PATH}" ]; then
     sed -i "s*{etcdCAFile}*${ETCD_SSL_BASE_PATH}/${ETCD_CA_FILE}*g" ${install_init_scheduler_config}
     sed -i "s*{etcdCertFile}*${ETCD_SSL_BASE_PATH}/${ETCD_CLIENT_CERT_FILE}*g" ${install_init_scheduler_config}
     sed -i "s*{etcdKeyFile}*${ETCD_SSL_BASE_PATH}/${ETCD_CLIENT_KEY_FILE}*g" ${install_init_scheduler_config}
@@ -528,6 +533,7 @@ function install_function_agent_and_runtime_manager_in_the_same_process() {
     LOCAL_IP="${LOCAL_IP}" \
     HOST_IP="${IP_ADDRESS}" \
     RUNTIME_METRICS_CONFIG=$RUNTIME_METRICS_CONFIG \
+    RUNTIME_METRICS_CONFIG_FILE=$RUNTIME_METRICS_CONFIG_FILE \
     INIT_LABELS=${LABELS} \
     ${bin} "${agent_args[@]}" ${unique_proxy_option} &
     FUNCTION_AGENT_PID="$!"
@@ -536,6 +542,7 @@ function install_function_agent_and_runtime_manager_in_the_same_process() {
     LOCAL_IP="${LOCAL_IP}" \
     HOST_IP="${IP_ADDRESS}" \
     RUNTIME_METRICS_CONFIG=$RUNTIME_METRICS_CONFIG \
+    RUNTIME_METRICS_CONFIG_FILE=$RUNTIME_METRICS_CONFIG_FILE \
     INIT_LABELS=${LABELS} \
     ${bin} "${agent_args[@]}" ${unique_proxy_option} >>"${FS_LOG_PATH}/${NODE_ID}-function_agent${STD_LOG_SUFFIX}" 2>&1 &
     FUNCTION_AGENT_PID="$!"
@@ -584,6 +591,7 @@ function install_function_master() {
       --election_mode=${ELECTION_MODE} \
       --services_path="${SERVICES_PATH}" \
       --lib_path="${FUNCTION_SYSTEM_DIR}/lib" \
+      --ssl_downgrade_enable="true" \
       --ssl_enable="${SSL_ENABLE}" --ssl_base_path="${SSL_BASE_PATH}" \
       --etcd_auth_type="${ETCD_AUTH_TYPE}" --etcd_root_ca_file="${ETCD_CA_FILE}" --etcd_cert_file="${ETCD_CLIENT_CERT_FILE}" --etcd_key_file="${ETCD_CLIENT_KEY_FILE}" \
       --etcd_ssl_base_path=${ETCD_SSL_BASE_PATH} \
@@ -609,6 +617,8 @@ function install_function_master() {
 
 function install_metaservice() {
   log_info "start metaservice, ip=${IP_ADDRESS}, port=${META_SERVICE_PORT}..."
+  local etcd_ssl_enable="false"
+  [ "X${ETCD_AUTH_TYPE}" = "XTLS" ] && etcd_ssl_enable="true"
   metaservice_config=${FUNCTION_SYSTEM_DIR}/config/meta_service/metaservice_config.json
   install_metaservice_config=${config_install_dir}/metaservice_config.json
   cp ${metaservice_config} ${install_metaservice_config}
@@ -617,7 +627,7 @@ function install_metaservice() {
   sed -i "s/{functionMasterAddr}/${IP_ADDRESS}:${GLOBAL_SCHEDULER_PORT}/g" ${install_metaservice_config}
   sed -i "s/{frontendAddr}/${IP_ADDRESS}:${FAAS_FRONTEND_HTTP_PORT}/g" ${install_metaservice_config}
   sed -i "s/{etcdAddr}/$(echo ${ETCD_CLUSTER_ADDRESS} | sed 's/,/","/g')/g" ${install_metaservice_config}
-  sed -i "s/{sslEnable}/${SSL_ENABLE}/g" ${install_metaservice_config}
+  sed -i "s/{sslEnable}/${etcd_ssl_enable}/g" ${install_metaservice_config}
   sed -i "s/{metaserviceSslEnable}/${META_SERVICE_SSL_ENABLE}/g" ${install_metaservice_config}
   sed -i "s/RequireAndVerifyClientCert/${META_SERVICE_CLIENT_AUTH_TYPE}/g" ${install_metaservice_config}
   sed -i "s*{azPrefix}*${ETCD_TABLE_PREFIX}*g" ${install_metaservice_config}
@@ -634,7 +644,7 @@ function install_metaservice() {
     sed -i "s*{moduleCertFile}**g" ${install_metaservice_config}
     sed -i "s*{moduleKeyFile}**g" ${install_metaservice_config}
   fi
-  if [ "X${SSL_ENABLE}" = "Xtrue" ] && [ -n "${ETCD_SSL_BASE_PATH}" ]; then
+  if [ "X${ETCD_AUTH_TYPE}" = "XTLS" ] && [ -n "${ETCD_SSL_BASE_PATH}" ]; then
     sed -i "s*{etcdCAFile}*${ETCD_SSL_BASE_PATH}/${ETCD_CA_FILE}*g" ${install_metaservice_config}
     sed -i "s*{etcdCertFile}*${ETCD_SSL_BASE_PATH}/${ETCD_CLIENT_CERT_FILE}*g" ${install_metaservice_config}
     sed -i "s*{etcdKeyFile}*${ETCD_SSL_BASE_PATH}/${ETCD_CLIENT_KEY_FILE}*g" ${install_metaservice_config}

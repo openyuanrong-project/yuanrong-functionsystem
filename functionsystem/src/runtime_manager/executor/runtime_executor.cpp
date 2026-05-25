@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
+#include <fstream>
 #include <nlohmann/json.hpp>
 #include <regex>
 #include <thread>
@@ -30,6 +31,7 @@
 
 #include "async/asyncafter.hpp"
 #include "async/collect.hpp"
+#include "common/hex/hex.h"
 #include "common/logs/logging.h"
 #include "common/resource_view/resource_type.h"
 #include "common/utils/exec_utils.h"
@@ -67,6 +69,10 @@ const std::string BASH_PATH = "/bin/bash";
 const std::string MAX_LOG_SIZE_MB_ENV = "YR_MAX_LOG_SIZE_MB";
 const std::string MAX_LOG_FILE_NUM_ENV = "YR_MAX_LOG_FILE_NUM";
 const std::string RUNTIME_DS_CONNECT_TIMEOUT_ENV = "DS_CONNECT_TIMEOUT_SEC";
+const std::string RUNTIME_METRICS_CONFIG = "RUNTIME_METRICS_CONFIG";
+const std::string RUNTIME_METRICS_CONFIG_FILE = "RUNTIME_METRICS_CONFIG_FILE";
+const std::string PROMETHEUS_PULL_EXPORTER = "prometheusPullExporter";
+const std::string CERT_SOURCE_STS_P12 = "stsP12";
 const std::vector<std::string> languages = {
     CPP_LANGUAGE,       GO_LANGUAGE,        JAVA_LANGUAGE,        JAVA11_LANGUAGE,
     JAVA17_LANGUAGE,    JAVA21_LANGUAGE,    PYTHON_LANGUAGE,      PYTHON3_LANGUAGE,
@@ -291,9 +297,16 @@ std::string GetInstallationType()
     ssize_t count = readlink("/proc/self/exe", result, PATH_MAX);
     std::string exePath(result, (count > 0) ? count : 0);
 
-    if (exePath.find("site-packages") != std::string::npos || exePath.find("venv") != std::string::npos) {
+    if (exePath.find("inner") != std::string::npos) {
+        return PKG_TYPE_TARBALL;
+    }
+
+    if (exePath.find("dist-packages") != std::string::npos ||
+        exePath.find("site-packages") != std::string::npos ||
+        exePath.find("venv") != std::string::npos) {
         return PKG_TYPE_WHEEL;
     }
+    
     return PKG_TYPE_TARBALL;
 }
 
@@ -665,15 +678,20 @@ litebus::Future<messages::StartInstanceResponse> RuntimeExecutor::StartRuntime(
         return GenFailStartInstanceResponse(request, RUNTIME_MANAGER_CREATE_EXEC_FAILED);
     }
 
+    auto tlsConfig = request->runtimeinstanceinfo().runtimeconfig().tlsconfig();
+    auto fillMetricsTLSStatus = FillMetricsTLSConfig(tlsConfig);
+    if (fillMetricsTLSStatus.IsError()) {
+        YRLOG_WARN("failed to fill metrics tls config, error: {}", fillMetricsTLSStatus.ToString());
+    }
     Status result;
     if (config_.isProtoMsgToRuntime) {
         result =
             WriteProtoToRuntime(request->runtimeinstanceinfo().requestid(), request->runtimeinstanceinfo().runtimeid(),
-                                request->runtimeinstanceinfo().runtimeconfig().tlsconfig(), execPtr);
+                                tlsConfig, execPtr);
     } else {
         result =
             WriteJsonToRuntime(request->runtimeinstanceinfo().requestid(), request->runtimeinstanceinfo().runtimeid(),
-                               request->runtimeinstanceinfo().runtimeconfig().tlsconfig(), execPtr);
+                               tlsConfig, execPtr);
     }
     if (result.IsError()) {
         return GenFailStartInstanceResponse(request, result.StatusCode());
@@ -728,6 +746,161 @@ void RuntimeExecutor::StartRuntimeStdRedirection(const std::string &runtimeID,
             };
         stdMonitor_->AddFd(stdErr.Get(), DEFAULT_STD_MONITOR_EVENT, ReadDataCallback);
     }
+}
+
+namespace {
+bool ReadFileContent(const std::string &path, std::string &content)
+{
+    if (path.empty()) {
+        return false;
+    }
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open()) {
+        YRLOG_WARN("failed to open metrics tls cert file {}", path);
+        return false;
+    }
+    content.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    return !content.empty();
+}
+
+litebus::Option<json> LoadRuntimeMetricsConfig()
+{
+    if (auto config = litebus::os::GetEnv(RUNTIME_METRICS_CONFIG); config.IsSome() && !config.Get().empty()) {
+        try {
+            return json::parse(config.Get());
+        } catch (const std::exception &e) {
+            YRLOG_WARN("failed to parse {}, error: {}", RUNTIME_METRICS_CONFIG, e.what());
+            return litebus::None();
+        }
+    }
+    std::string configFile;
+    if (auto file = litebus::os::GetEnv(RUNTIME_METRICS_CONFIG_FILE); file.IsSome() && !file.Get().empty()) {
+        configFile = file.Get();
+    }
+    if (configFile.empty()) {
+        return litebus::None();
+    }
+
+    std::ifstream file(configFile);
+    if (!file.is_open()) {
+        YRLOG_WARN("failed to open runtime metrics config file {}", configFile);
+        return litebus::None();
+    }
+    try {
+        json config;
+        file >> config;
+        return config;
+    } catch (const std::exception &e) {
+        YRLOG_WARN("failed to parse runtime metrics config file {}, error: {}", configFile, e.what());
+        return litebus::None();
+    }
+}
+
+litebus::Option<json> FindPrometheusPullExporterConfig(const json &metricsConfig)
+{
+    if (!metricsConfig.is_object() || !metricsConfig.contains("backends") || !metricsConfig.at("backends").is_array()) {
+        return litebus::None();
+    }
+    for (const auto &backend : metricsConfig.at("backends")) {
+        if (!backend.is_object() || !backend.contains("immediatelyExport")) {
+            continue;
+        }
+        const auto &immediateExport = backend.at("immediatelyExport");
+        if (!immediateExport.is_object() || !immediateExport.contains("exporters") ||
+            !immediateExport.at("exporters").is_array()) {
+            continue;
+        }
+        for (const auto &exporter : immediateExport.at("exporters")) {
+            if (!exporter.is_object() || !exporter.contains(PROMETHEUS_PULL_EXPORTER)) {
+                continue;
+            }
+            return exporter.at(PROMETHEUS_PULL_EXPORTER);
+        }
+    }
+    return litebus::None();
+}
+
+void ClearMetricsTLSConfig(::messages::TLSConfig &tlsConfig)
+{
+    tlsConfig.clear_metricsrootcertdata();
+    tlsConfig.clear_metricscertdata();
+    tlsConfig.clear_metricskeydata();
+}
+
+bool HasMetricsTLSConfig(const ::messages::TLSConfig &tlsConfig)
+{
+    return !tlsConfig.metricsrootcertdata().empty() || !tlsConfig.metricscertdata().empty() ||
+           !tlsConfig.metricskeydata().empty();
+}
+
+bool IsMetricsTLSConfigComplete(const ::messages::TLSConfig &tlsConfig)
+{
+    return !tlsConfig.metricsrootcertdata().empty() && !tlsConfig.metricscertdata().empty() &&
+           !tlsConfig.metricskeydata().empty();
+}
+
+void SetMetricsTLSConfigFromBase64(::messages::TLSConfig &tlsConfig, const json &initConfig)
+{
+    tlsConfig.set_metricsrootcertdata(initConfig.value("rootCertData", ""));
+    tlsConfig.set_metricscertdata(initConfig.value("certData", ""));
+    tlsConfig.set_metricskeydata(initConfig.value("keyData", ""));
+}
+
+void SetMetricsTLSConfigFromFiles(::messages::TLSConfig &tlsConfig, const json &initConfig)
+{
+    std::string rootCertData;
+    std::string certData;
+    std::string keyData;
+    if (ReadFileContent(initConfig.value("rootCertFile", ""), rootCertData) &&
+        ReadFileContent(initConfig.value("certFile", ""), certData) &&
+        ReadFileContent(initConfig.value("keyFile", ""), keyData)) {
+        tlsConfig.set_metricsrootcertdata(Base64Encode(rootCertData));
+        tlsConfig.set_metricscertdata(Base64Encode(certData));
+        tlsConfig.set_metricskeydata(Base64Encode(keyData));
+    }
+}
+}  // namespace
+
+Status RuntimeExecutor::FillMetricsTLSConfigFromStsP12(::messages::TLSConfig & /* tlsConfig */) const
+{
+    return Status::OK();
+}
+
+Status RuntimeExecutor::FillMetricsTLSConfig(::messages::TLSConfig &tlsConfig) const
+{
+    auto metricsConfig = LoadRuntimeMetricsConfig();
+    if (metricsConfig.IsNone()) {
+        return Status::OK();
+    }
+    auto exporterConfig = FindPrometheusPullExporterConfig(metricsConfig.Get());
+    if (exporterConfig.IsNone()) {
+        return Status::OK();
+    }
+    const auto &exporter = exporterConfig.Get();
+    if (!exporter.value("enable", false) || !exporter.contains("initConfig") ||
+        !exporter.at("initConfig").is_object()) {
+        return Status::OK();
+    }
+    const auto &initConfig = exporter.at("initConfig");
+    if (!initConfig.value("isSSLEnable", false)) {
+        return Status::OK();
+    }
+    if (initConfig.value("certSource", "") == CERT_SOURCE_STS_P12) {
+        auto status = FillMetricsTLSConfigFromStsP12(tlsConfig);
+        if (status.IsError()) {
+            return status;
+        }
+    } else if (initConfig.contains("rootCertData") || initConfig.contains("certData") ||
+               initConfig.contains("keyData")) {
+        SetMetricsTLSConfigFromBase64(tlsConfig, initConfig);
+    } else {
+        SetMetricsTLSConfigFromFiles(tlsConfig, initConfig);
+    }
+    if (HasMetricsTLSConfig(tlsConfig) && !IsMetricsTLSConfigComplete(tlsConfig)) {
+        YRLOG_WARN("metrics tls config is incomplete, skip passing it to runtime");
+        ClearMetricsTLSConfig(tlsConfig);
+    }
+    return Status::OK();
 }
 
 Status RuntimeExecutor::WriteProtoToRuntime(const std::string &requestID, const std::string &runtimeID,
@@ -2174,6 +2347,10 @@ litebus::Future<messages::UpdateCredResponse> RuntimeExecutor::UpdateCredForRunt
     tlsConfig.set_salt(request->salt());
     tlsConfig.set_token(request->token());
     tlsConfig.mutable_tenantcredentials()->CopyFrom(request->tenantcredentials());
+    auto fillMetricsTLSStatus = FillMetricsTLSConfig(tlsConfig);
+    if (fillMetricsTLSStatus.IsError()) {
+        YRLOG_WARN("failed to fill metrics tls config, error: {}", fillMetricsTLSStatus.ToString());
+    }
     Status result = config_.isProtoMsgToRuntime ? WriteProtoToRuntime(requestID, runtimeID, tlsConfig, execPtr)
                                                 : WriteJsonToRuntime(requestID, runtimeID, tlsConfig, execPtr);
     if (result.IsError()) {

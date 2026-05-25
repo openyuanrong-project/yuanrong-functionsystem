@@ -104,7 +104,8 @@ public:
      */
     virtual litebus::Future<bool> IsSystemFunction(const std::string &function) const;
 
-    virtual litebus::Future<std::vector<std::string>> GetLocalInstances();
+    virtual litebus::Future<std::vector<std::string>> GetLocalInstances(
+        const std::function<bool(const resource_view::InstanceInfo &)> &filter);
 
     virtual void Attach(const std::shared_ptr<InstanceListener> &listener) const;
 

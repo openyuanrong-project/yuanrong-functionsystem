@@ -211,7 +211,9 @@ void AbnormalProcessorActor::SchedulerAbnormaled(const std::shared_ptr<litebus::
 {
     ASSERT_IF_NULL(observer_);
     // Polling to check whether local instances still exist
-    (void)observer_->GetLocalInstances().Then(
+    (void)observer_->GetLocalInstances([](const resource_view::InstanceInfo &info) {
+        return !info.lowreliability();
+    }).Then(
         litebus::Defer(GetAID(), &AbnormalProcessorActor::OnSchedulerAbnormaled, std::placeholders::_1, abnormaled));
 }
 

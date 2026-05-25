@@ -38,11 +38,8 @@ MetaStoreMaintenanceClientStrategy::MetaStoreMaintenanceClientStrategy(
     healthCheckHelper_.SetBackOffStrategy(backOff, timeoutOption_.operationRetryTimes);
 }
 
-void MetaStoreMaintenanceClientStrategy::Init()
+void MetaStoreMaintenanceClientStrategy::StartHeartbeat()
 {
-    ASSERT_IF_NULL(maintenanceServiceAid_);
-    YRLOG_INFO("Init maintenance Client actor({}).", maintenanceServiceAid_->HashString());
-    Receive("OnHealthCheck", &MetaStoreMaintenanceClientStrategy::OnHealthCheck);
     Link(*maintenanceServiceAid_);
     litebus::AID heartbeatAID(HEARTBEAT_OBSERVER_BASENAME + "meta-store", maintenanceServiceAid_->UnfixUrl());
     if (pingPongDriver_ == nullptr) {
@@ -53,6 +50,14 @@ void MetaStoreMaintenanceClientStrategy::Init()
             });
     }
     (void)pingPongDriver_->Start(heartbeatAID);
+}
+
+void MetaStoreMaintenanceClientStrategy::Init()
+{
+    ASSERT_IF_NULL(maintenanceServiceAid_);
+    YRLOG_INFO("Init maintenance Client actor({}).", maintenanceServiceAid_->HashString());
+    Receive("OnHealthCheck", &MetaStoreMaintenanceClientStrategy::OnHealthCheck);
+    StartHeartbeat();
 }
 
 void MetaStoreMaintenanceClientStrategy::HeartBeatTimeout()
@@ -181,18 +186,13 @@ void MetaStoreMaintenanceClientStrategy::CheckChannelAndWaitForReconnect()
 void MetaStoreMaintenanceClientStrategy::OnAddressUpdated(const std::string &address)
 {
     ASSERT_IF_NULL(maintenanceServiceAid_);
-    YRLOG_DEBUG("maintenance client update address from {} to {}", address_, address);
+    YRLOG_INFO("maintenance client will update address from {} to {}", address_, address);
+    if (address.empty()) {
+        YRLOG_ERROR("maintenance client new address is empty, no need to update");
+        return;
+    }
     address_ = address;
     maintenanceServiceAid_->SetUrl(address);
-    Link(*maintenanceServiceAid_);
-    litebus::AID heartbeatAID(HEARTBEAT_OBSERVER_BASENAME + "meta-store", maintenanceServiceAid_->UnfixUrl());
-    if (pingPongDriver_ == nullptr) {
-        pingPongDriver_ = std::make_shared<HeartbeatClientDriver>(
-            "meta-store", META_STORE_HEARTBEAT_PING_TIMES, META_STORE_HEARTBEAT_PING_CYCLE_MS,
-            [aid(GetAID())](const litebus::AID &) {
-                litebus::Async(aid, &MetaStoreMaintenanceClientStrategy::HeartBeatTimeout);
-            });
-    }
-    (void)pingPongDriver_->Start(heartbeatAID);
+    StartHeartbeat();
 }
 }  // namespace functionsystem::meta_store

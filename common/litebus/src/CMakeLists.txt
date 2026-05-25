@@ -44,7 +44,7 @@ if(${HTTP_ENABLED} STREQUAL "on")
 endif(${HTTP_ENABLED} STREQUAL "on")
 
 add_library(litebus_shared SHARED $<TARGET_OBJECTS:litebus_obj>)
-target_link_libraries(litebus_shared ${LINK_LIBS})
+target_link_libraries(litebus_shared ${LINK_LIBS} util)
 target_include_directories(litebus_shared PUBLIC ${LITEBUS_INCLUDE_DIR})
 
 set_target_properties(

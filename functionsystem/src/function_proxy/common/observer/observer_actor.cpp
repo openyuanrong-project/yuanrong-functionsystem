@@ -201,7 +201,7 @@ void ObserverActor::HandleInstanceEvent(bool synced, const WatchEvent &event, st
             break;
         }
         case EVENT_TYPE_DELETE: {
-            YRLOG_DEBUG("receive instance delete event, instance({}), key({})", instanceID, eventKey);
+            YRLOG_INFO("receive instance delete event, instance({}), key({})", instanceID, eventKey);
             DelInstanceEvent(instanceID, event.kv.mod_revision());
             break;
         }
@@ -262,7 +262,7 @@ void ObserverActor::HandleRouteEvent(bool synced, const WatchEvent &event, std::
             break;
         }
         case EVENT_TYPE_DELETE: {
-            YRLOG_DEBUG("receive routeInfo delete event, instance({})", instanceID);
+            YRLOG_INFO("receive routeInfo delete event, instance({})", instanceID);
             DelInstanceEvent(instanceID, event.kv.mod_revision());
             break;
         }
@@ -557,8 +557,8 @@ litebus::Future<Status> ObserverActor::DelInstance(const std::string &instanceID
         YRLOG_ERROR("failed to get instance key from InstanceInfo");
         return Status(StatusCode::FAILED);
     }
-    YRLOG_DEBUG("delete instance to meta store, instance({}), instance status: {}, functionKey: {}, path: {}",
-                instanceInfo.instanceid(), instanceInfo.instancestatus().code(), instanceInfo.function(), path.Get());
+    YRLOG_INFO("delete instance to meta store, instance({}), instance status: {}, functionKey: {}, path: {}",
+        instanceInfo.instanceid(), instanceInfo.instancestatus().code(), instanceInfo.function(), path.Get());
 
     std::shared_ptr<StoreInfo> infoPutInfo;
     infoPutInfo = std::make_shared<StoreInfo>(path.Get(), "");
@@ -742,7 +742,8 @@ bool IsSchedulingInstanceOfGroup(const resource_view::InstanceInfo &info)
     return !info.groupid().empty() && info.instancestatus().code() == static_cast<int32_t>(InstanceState::SCHEDULING);
 }
 
-std::vector<std::string> ObserverActor::GetLocalInstances()
+std::vector<std::string> ObserverActor::GetLocalInstances(
+    const std::function<bool(const resource_view::InstanceInfo &)> &filter)
 {
     std::vector<std::string> localInstances;
     for (const auto &[instanceID, info] : instanceInfoMap_) {
@@ -752,7 +753,9 @@ std::vector<std::string> ObserverActor::GetLocalInstances()
             if (IsDriver(info) || IsSchedulingInstanceOfGroup(info)) {  // static ?
                 continue;
             }
-            (void)localInstances.emplace_back(instanceID);
+            if (filter(info)) {
+                (void)localInstances.emplace_back(instanceID);
+            }
         }
     }
     return localInstances;
@@ -1251,8 +1254,12 @@ litebus::Future<resource_view::InstanceInfo> ObserverActor::GetInstanceRouteInfo
 litebus::Future<resource_view::InstanceInfo> ObserverActor::OnGetInstanceFromMetaStore(
     const litebus::Future<std::shared_ptr<GetResponse>> &getResponse, const std::string &instanceID)
 {
-    if (getResponse.IsError() || getResponse.Get() == nullptr || getResponse.Get()->kvs.empty()) {
+    if (getResponse.IsError()) {
         YRLOG_ERROR("failed to get instance({}) from meta store", instanceID);
+        return litebus::Future<resource_view::InstanceInfo>(litebus::Status(-1));
+    }
+    if (getResponse.Get() == nullptr || getResponse.Get()->kvs.empty()) {
+        YRLOG_ERROR("failed to get instance({}) from meta store, kvs is empty", instanceID);
         return litebus::Future<resource_view::InstanceInfo>(litebus::Status(-1));
     }
     resource_view::RouteInfo routeInfo;

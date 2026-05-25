@@ -331,6 +331,15 @@ TEST_F(DISABLED_S3DeployerTest, S3DeployWithEmptyDownload)
     EXPECT_TRUE(deployer->Deploy(request).status.IsOk());
 }
 
+TEST_F(DISABLED_S3DeployerTest, S3DeployCheckObsErrorNeedRetry)
+{
+    auto deployer = std::make_shared<function_agent::S3Deployer>(s3Config_, codePackageThresholds_);
+    EXPECT_TRUE(deployer->CheckObsErrorNeedRetry(OBS_STATUS_FailedToConnect));
+    EXPECT_TRUE(deployer->CheckObsErrorNeedRetry(OBS_STATUS_InternalError));
+    EXPECT_TRUE(deployer->CheckObsErrorNeedRetry(OBS_STATUS_PartialFile));
+    EXPECT_FALSE(deployer->CheckObsErrorNeedRetry(OBS_STATUS_BadMd5));
+}
+
 TEST_F(DISABLED_S3DeployerTest, S3RetryDownloadCodeSuccess)  // NOLINT
 {
     auto request = std::make_shared<messages::DeployRequest>();

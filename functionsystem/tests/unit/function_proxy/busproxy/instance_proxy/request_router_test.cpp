@@ -112,7 +112,7 @@ TEST_F(RequestRouterTest, InstanceNotFound)
     EXPECT_AWAIT_TRUE([&]() -> bool { return flag; });
     auto response = std::make_shared<runtime_rpc::StreamingMessage>();
     (void)response->ParseFromString(testMsg);
-    EXPECT_EQ(response->messageid(), "messageID");
+    EXPECT_EQ(response->messageid(), "requestID");
     ASSERT_TRUE(response->has_callrsp());
     EXPECT_EQ(static_cast<int>(response->callrsp().code()), static_cast<int>(ERR_INSTANCE_NOT_FOUND));
 }

@@ -22,7 +22,7 @@
 
 #include "metrics/exporters/exporter.h"
 #include "curl_helper.h"
-#include "metrics/exporters/prometheus_push_exporter/prometheus_text_serializer.h"
+#include "metrics/exporters/common/prometheus_text_serializer.h"
 
 namespace observability::exporters::metrics {
 

@@ -262,9 +262,9 @@ Status S3Deployer::DownloadCode(const std::string &destFile, const ::messages::D
         YRLOG_ERROR("lost connection with obs, try to reconnect. status code is {}.", obs_get_status_name(data.status));
         return RetryDownloadCode(destFile, config);
     } else if (CheckObsErrorNeedRetry(data.status)) {
-        YRLOG_ERROR("failed to Get object metadata({}), status code is {}, need retry.", config.objectid(),
+        YRLOG_ERROR("failed to Get object({}), status code is {}, need retry.", config.objectid(),
                     obs_get_status_name(data.status));
-        return Status(StatusCode::FUNC_AGENT_OBS_ERROR_NEED_RETRY, "failed to Get object metadata, obs native err: " +
+        return Status(StatusCode::FUNC_AGENT_OBS_ERROR_NEED_RETRY, "failed to Get object, obs native err: " +
                                                                        std::string(obs_get_status_name(data.status)));
     } else if (data.status != OBS_STATUS_OK) {
         YRLOG_ERROR("failed to Get object({}), status code is {}.", config.objectid(),
@@ -281,7 +281,8 @@ Status S3Deployer::DownloadCode(const std::string &destFile, const ::messages::D
 
 bool S3Deployer::CheckObsErrorNeedRetry(const obs_status &status)
 {
-    if (status == OBS_STATUS_FailedToConnect || status == OBS_STATUS_InternalError) {
+    if (status == OBS_STATUS_FailedToConnect || status == OBS_STATUS_InternalError
+        || status == OBS_STATUS_PartialFile) {
         return true;
     }
     return false;

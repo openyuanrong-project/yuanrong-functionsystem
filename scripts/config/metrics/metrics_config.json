@@ -1,6 +1,13 @@
 {
   "backends": [
     {
+      "immediatelyExport": {
+        "name": "Runtime",
+        "enable": true,
+        "exporters": []
+      }
+    },
+    {
       "batchExport": {
         "name": "LakeHouse",
         "enable": true,

@@ -52,6 +52,7 @@ const std::string YR_INSTANCE_EXIT_LATENCY("yr_instance_exit_latency");
 const std::string YR_INSTANCE_MEMORY_USAGE("yr_instance_memory_usage");
 
 const std::string FILE_EXPORTER("fileExporter");
+const std::string PROMETHEUS_PULL_EXPORTER("prometheusPullExporter");
 const std::string PROMETHEUS_PUSH_EXPORTER("prometheusPushExporter");
 const std::string OPENTELEMETRY_EXPORTER("opentelemetryExporter");
 

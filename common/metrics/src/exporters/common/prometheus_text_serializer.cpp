@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "metrics/exporters/prometheus_push_exporter/prometheus_text_serializer.h"
+#include "metrics/exporters/common/prometheus_text_serializer.h"
 
 namespace observability {
 
@@ -63,7 +63,6 @@ void SerializeContentHead(std::ostream &ost, const observability::sdk::metrics::
     ost << " ";
 }
 
-// used only for gauge,counter
 void SerializeSimpleMetric(std::ostream &ost, const observability::sdk::metrics::MetricData &metric,
                            const observability::sdk::metrics::PointData point)
 {

@@ -68,6 +68,7 @@ const std::string ENV_DELEGATE_DOWNLOAD_STORAGE_TYPE = "ENV_DELEGATE_DOWNLOAD_ST
 const std::string KUBERNETES_SERVICE_HOST = "KUBERNETES_SERVICE_HOST";
 const std::string KUBERNETES_SERVICE_PORT = "KUBERNETES_SERVICE_PORT";
 const std::string POD_NAME = "POD_NAME";
+const std::string POD_NAMESPACE = "POD_NAMESPACE";
 const std::string GODEBUG_KEY = "GODEBUG";
 const std::string GODEBUG_VALUE = "madvdontneed=1,cgocheck=0";
 

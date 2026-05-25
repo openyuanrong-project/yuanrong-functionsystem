@@ -42,6 +42,7 @@ protected:
     void Exited(const litebus::AID &from) override;
 
 private:
+    void StartHeartbeat();
     void OnHealthCheck(const litebus::AID &from, std::string &&name, std::string &&msg);
 
     std::shared_ptr<litebus::AID> maintenanceServiceAid_;

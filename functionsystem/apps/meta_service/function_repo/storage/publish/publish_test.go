@@ -258,6 +258,39 @@ func Test_buildFaaSFunctionVersionValue(t *testing.T) {
 	})
 }
 
+func Test_buildFaaSFuncMetaDataPriorityAZ(t *testing.T) {
+	patches := gomonkey.NewPatches()
+	defer patches.Reset()
+	patches.ApplyFunc(getFaaSLayerBucket, func(storage.Transaction, []storage.FunctionLayer,
+		server.TenantInfo) ([]*metadata.FaaSLayer, error) {
+		return nil, nil
+	})
+	patches.ApplyFunc(buildCodeMetaData, func(storage.FunctionVersionValue, string) (metadata.CodeMetaData, error) {
+		return metadata.CodeMetaData{}, nil
+	})
+
+	info, err := buildFaaSFuncMetaData(nil, storage.FunctionVersionValue{
+		Function: storage.Function{
+			Name:        "0@default@test",
+			Description: "desc",
+		},
+		FunctionVersion: storage.FunctionVersion{
+			Version:    "latest",
+			Runtime:    "go1.x",
+			Handler:    "main",
+			Timeout:    30,
+			PriorityAZ: "az1",
+		},
+	}, server.TenantInfo{
+		BusinessID: "biz",
+		TenantID:   "tenant",
+		ProductID:  "product",
+	}, metadata.FaaSFuncMeta{})
+
+	assert.Nil(t, err)
+	assert.Equal(t, "az1", info.ExtendedMetaData.PriorityAZ)
+}
+
 func Test_buildCodeMeteData(t *testing.T) {
 	Convey("Test buildCodeMeteData", t, func() {
 		fv := storage.FunctionVersionValue{

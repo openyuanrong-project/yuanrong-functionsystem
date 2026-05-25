@@ -198,6 +198,16 @@ Status InstanceView::SubscribeInstanceEvent(const std::string &subscriber, const
     if (instance->second.instancestatus().code() == static_cast<int32_t>(InstanceState::RUNNING)) {
         NotifySubscriberInstanceReady(targetInstance, instance->second);
     }
+    if (instance->second.instancestatus().code() == static_cast<int32_t>(InstanceState::EVICTING)) {
+        auto routeInfo = TransferInstanceInfo(instance->second, nodeID_);
+        routeInfo->isLocal = false;
+        auto instanceProxy = localInstances_[subscriber];
+        if (instanceProxy == nullptr) {
+            YRLOG_ERROR("instance ({}) subscribe target ({}), but instanceProxy is null", subscriber, targetInstance);
+            return Status(StatusCode::POINTER_IS_NULL, "instanceProxy is null for subscriber: " + subscriber);
+        }
+        NotifyChanged(instanceProxy->GetAID(), targetInstance, instance->second.functionproxyid(), routeInfo);
+    }
     // while subscribed an already fatal or evicted instance
     if (instance->second.instancestatus().code() == static_cast<int32_t>(InstanceState::FATAL) ||
         instance->second.instancestatus().code() == static_cast<int32_t>(InstanceState::EVICTED)) {
@@ -206,7 +216,10 @@ Status InstanceView::SubscribeInstanceEvent(const std::string &subscriber, const
         auto errCode = instance->second.instancestatus().errcode();
         auto msg = instance->second.instancestatus().msg();
         auto instanceProxy = localInstances_[subscriber];
-        ASSERT_IF_NULL(instanceProxy);
+        if (instanceProxy == nullptr) {
+            YRLOG_ERROR("instance ({}) subscribe target ({}), but instanceProxy is null", subscriber, targetInstance);
+            return Status(StatusCode::POINTER_IS_NULL, "instanceProxy is null for subscriber: " + subscriber);
+        }
         litebus::Async(instanceProxy->GetAID(), &InstanceProxy::Fatal, targetInstance, msg,
                        static_cast<StatusCode>(errCode));
     }
@@ -400,6 +413,23 @@ void InstanceView::Reject(const std::string &instanceID, const resources::Instan
     if (auto iter(localInstances_.find(instanceID)); iter != localInstances_.end()) {
         YRLOG_INFO("instance({}) is set to reject request, errcode({}), msg({})", instanceID, errCode, msg);
         litebus::Async(iter->second->GetAID(), &InstanceProxy::Reject, instanceID, msg,
+                       static_cast<StatusCode>(errCode));
+    }
+    // notify remote subscribers to update route info and set reject state
+    const auto &functionProxyID = instanceInfo.functionproxyid();
+    auto routeInfo = TransferInstanceInfo(instanceInfo, nodeID_);
+    routeInfo->isLocal = false;
+    for (const auto &subscriber : subscribedInstances_[instanceID]) {
+        if (localInstances_.find(subscriber) == localInstances_.end()) {
+            continue;
+        }
+        auto instanceProxy = localInstances_[subscriber];
+        if (instanceProxy == nullptr) {
+            YRLOG_ERROR("instance ({}) reject subscriber ({}), but instanceProxy is null", instanceID, subscriber);
+            continue;
+        }
+        NotifyChanged(instanceProxy->GetAID(), instanceID, functionProxyID, routeInfo);
+        litebus::Async(instanceProxy->GetAID(), &InstanceProxy::Reject, instanceID, msg,
                        static_cast<StatusCode>(errCode));
     }
 }

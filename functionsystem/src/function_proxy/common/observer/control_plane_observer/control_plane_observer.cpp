@@ -161,10 +161,11 @@ litebus::Future<Status> ControlPlaneObserver::DelInstanceEvent(const std::string
     return litebus::Async(observerActor_->GetAID(), &ObserverActor::DelInstanceEvent, instanceID, modRevision);
 }
 
-litebus::Future<std::vector<std::string>> ControlPlaneObserver::GetLocalInstances()
+litebus::Future<std::vector<std::string>> ControlPlaneObserver::GetLocalInstances(
+    const std::function<bool(const resource_view::InstanceInfo &)> &filter)
 {
     ASSERT_IF_NULL(observerActor_);
-    return litebus::Async(observerActor_->GetAID(), &ObserverActor::GetLocalInstances);
+    return litebus::Async(observerActor_->GetAID(), &ObserverActor::GetLocalInstances, filter);
 }
 
 litebus::Future<bool> ControlPlaneObserver::InstanceSyncDone()

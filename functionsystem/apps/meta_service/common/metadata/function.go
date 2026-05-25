@@ -121,6 +121,8 @@ type ExtendedMetaData struct {
 	ExtendedHandler     map[string]string         `json:"extended_handler" valid:",optional"`
 	ExtendedTimeout     map[string]int            `json:"extended_timeout" valid:",optional"`
 	Device              types.Device              `json:"device,omitempty" valid:",optional"`
+	PriorityAZ          string                    `json:"priority_az,omitempty"`
+	EnableMetrics       bool                      `json:"enable_metrics,omitempty"`
 	EnableAgentSession  bool                      `json:"enable_agent_session,omitempty"`
 	CustomContainerConfig CustomContainerConfig   `json:"custom_container_config" valid:",optional"`
 	CustomHealthCheck     CustomHealthCheck       `json:"custom_health_check" valid:",optional"`

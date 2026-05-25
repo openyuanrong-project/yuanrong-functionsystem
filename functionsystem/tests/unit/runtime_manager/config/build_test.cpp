@@ -83,13 +83,13 @@ TEST_F(BuildTest, GeneratePosixEnvsTest)
         // ovveride default envs
         startReq->mutable_runtimeinstanceinfo()->mutable_runtimeconfig()->mutable_posixenvs()->insert(
             { "PYTHONUNBUFFERED", "0" });
-        // user envs not in whitelist, so can not ovveride yuanrong default envs
+        // user envs in whitelist can override yuanrong default envs
         startReq->mutable_runtimeinstanceinfo()->mutable_runtimeconfig()->mutable_posixenvs()->insert(
             { "ENABLE_METRICS", "true" });
         auto envMap = GeneratePosixEnvs(runtimeConfig, startReq, "21003");
         EXPECT_EQ(envMap["user_key"], "user_value");
         EXPECT_EQ(envMap["PYTHONUNBUFFERED"], "0");
-        EXPECT_EQ(envMap["ENABLE_METRICS"], "false");
+        EXPECT_EQ(envMap["ENABLE_METRICS"], "true");
     }
     {
         auto startReq = std::make_shared<messages::StartInstanceRequest>();
